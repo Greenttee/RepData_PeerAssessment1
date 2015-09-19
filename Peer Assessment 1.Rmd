@@ -1,0 +1,153 @@
+---
+title: 'Reproducible Research Peer Assessment #1'
+author: "Tony Truong"
+date: "September 18, 2015"
+output: html_document
+keep_md: true
+---
+
+#Peer Assignment # 1
+
+#### Loading and Preprocessing the data
+
+Data contained in file named activity.csv stored locally on my desktop
+
+```{r}
+setwd("C:/Users/Tony Truong/Desktop/Coursera R/Reproducable Research")
+library(ggplot2)
+ActData<-read.csv(file = "activity.csv", header = TRUE, sep = ",")
+head(ActData)
+```
+
+Convert date from factor to date
+```{r}
+ActData$date<-as.Date(ActData$date, "%Y-%m-%d")
+```
+
+
+
+#### Create cDate and cDateInt columns to store POSIXct format date data (just in case)
+
+```{r}
+ActData$cDate<-as.POSIXct(ActData$date)
+ActData$cDateInt<-(ActData$cDate+ActData$interval*60)
+```
+
+# What is the mean total number of steps taken per day?
+
+Run crosstab to get total steps, with NA's omitted
+
+```{r}
+DailySteps<-xtabs(steps~cDate, data = ActData, exclude = NA)
+```
+
+Plot Total Daily Steps
+```{r}
+plot(DailySteps, type ="h", xlab="Date",main="Total Daily Steps, NAs excluded")
+```
+
+Calculate Mean & Median Daily Steps
+
+```{r}
+DailySteps<-data.frame(DailySteps)
+MeanDailySteps<-mean(DailySteps$Freq)
+MeanDailySteps
+MedianDailySteps<-median(DailySteps$Freq)
+MedianDailySteps
+```
+# What is the average total number of steps taken per day
+
+Run crosstab with aggregate to create xtab with means (of intervals over all dates) as summary
+
+```{r}
+AvgDSteps<-xtabs(steps~interval, aggregate(steps~interval,ActData,mean, exclue =NA ))
+plot(AvgDSteps, type = "l", ylab="Total Steps ", main="Total Steps per Interval")
+
+```
+
+
+
+#####Now we look for the interval that has the maximum average daily steps
+
+
+```{r}
+AvgDSteps<-data.frame(AvgDSteps)
+
+MaxInterval<-AvgDSteps[which.max(AvgDSteps[,2]),]
+MaxInterval
+```
+So the maximum average daily total steps occurs at interval 835 with a total average of 206.16 steps.
+
+
+# Imputing missing value
+
+#### Calculate the number of NA's in ActData
+```{r}
+colSums(is.na(ActData))
+```
+ I chose to substitute the interval average value for the NA value.
+ So for each NA value found, must find the corresponding interval to lookup 
+ the interval's daily average for substituting.
+
+ Will create a new df so as not to overwrite original data.
+
+```{r}
+ActDataMod<- ActData
+```
+ Outer loop goes through all the rows in ActData looking for NA's
+ Inner loop test for NA and lookup interval value in ActData 
+ then the corresponding average interval steps is used to substitute for the NA 
+ (also need to convert steps from factor back to integer) 
+ print out modified data frame just to check....
+
+
+```{r}
+AvgDSteps<-data.frame(AvgDSteps)
+for (i in 1:nrow(ActData)){
+
+        if(is.na(ActData$steps[i])){
+                ActDataMod$steps[i] <- subset(AvgDSteps, interval == ActData[i,3],select = Freq)
+        }
+}
+ActDataMod$steps<-as.integer(ActDataMod$steps)
+head(ActDataMod)
+head(ActData)
+```
+
+#### Recalculate daily total steps with modified data
+```{r}
+DailyStepsMod<-xtabs(steps~cDate, data = ActDataMod, exclude = NA)
+plot(DailyStepsMod, type ="h", xlab= "Date", ylab="Total Daily Steps", main= "NA's replaced with Interval Avg")
+
+MeanDStepsMod<-mean(DailyStepsMod)
+MeanDStepsMod
+MedianDStepsMod<-median(DailyStepsMod)
+MedianDStepsMod
+```
+The impact of missing values (NA's) in this case does NOT seem to be very significant. 
+
+# Are there differences in activity patterns between weekdays and weekends?
+
+### Adding column for Weekdays vs Weekend Activities
+```{r}
+WDaysList <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+ActDataMod$WDays<-factor((weekdays(ActDataMod$cDate) %in% WDaysList), levels=c(FALSE, TRUE), labels=c('weekend','weekday'))
+
+```
+
+# Weekday vs Weekend Activities
+
+```{r}
+WeekdaysActAvg<-data.frame(xtabs(steps~interval + WDays, aggregate(steps~interval + WDays, ActDataMod, mean)))
+
+WeekdaysActAvg$interval<-as.integer(WeekdaysActAvg$interval)
+
+g<-ggplot(WeekdaysActAvg, aes(x=interval, y=Freq))
+g + facet_grid(WDays~.)+ geom_line()
+```
+
+It is quite clear from the plots that the activity levels for weekdays are quite distinct from weekend activities.   
+
+
+
+
